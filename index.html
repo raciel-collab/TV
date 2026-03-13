@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOYB · Dashboard de Obrigações</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0a0c10;
+    --surface: #111318;
+    --border:  #1e2330;
+    --text:    #e8ecf4;
+    --muted:   #5a6480;
+    --accent:  #3b82f6;
+    --ok:      #22d3a0;
+    --warn:    #f59e0b;
+    --danger:  #ef4444;
+    --today:   #a78bfa;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif;
+    height:100vh; overflow:hidden; display:grid; grid-template-rows:72px 1fr;
+  }
+
+  /* HEADER */
+  header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 32px; border-bottom:1px solid var(--border); background:var(--surface);
+    position:relative; overflow:hidden;
+  }
+  header::before { content:''; position:absolute; left:0; top:0; width:4px; height:100%; background:linear-gradient(180deg,var(--accent),var(--today)); }
+  .logo { font-family:'Bebas Neue',sans-serif; font-size:32px; letter-spacing:4px; background:linear-gradient(135deg,#e8ecf4 40%,var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .logo span { color:var(--accent); -webkit-text-fill-color:var(--accent); opacity:.7; font-size:14px; letter-spacing:2px; display:block; line-height:1; }
+  .header-date { font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:3px; color:var(--muted); text-align:center; }
+  .header-time { font-family:'JetBrains Mono',monospace; font-size:38px; letter-spacing:2px; color:var(--text); line-height:1; text-align:center; }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  .sync-info { text-align:right; font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+  .sync-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--ok); margin-right:6px; animation:pulse 2s infinite; }
+  .sync-dot.error { background:var(--danger); animation:none; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+  .config-btn { background:var(--border); border:1px solid var(--border); color:var(--muted); padding:6px 14px; border-radius:6px; font-family:'DM Sans',sans-serif; font-size:12px; cursor:pointer; transition:all .2s; }
+  .config-btn:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  /* MODAL */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:100; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:32px; width:520px; max-width:95vw; }
+  .modal h2 { font-family:'Bebas Neue',sans-serif; font-size:26px; letter-spacing:2px; margin-bottom:8px; }
+  .modal .sub { font-size:12px; color:var(--muted); margin-bottom:24px; line-height:1.7; }
+  .modal label { font-size:11px; color:var(--muted); display:block; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px; }
+  .modal input { width:100%; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:'JetBrains Mono',monospace; font-size:13px; margin-bottom:16px; }
+  .modal input:focus { outline:none; border-color:var(--accent); }
+  .modal-actions { display:flex; gap:12px; justify-content:flex-end; margin-top:8px; }
+  .btn-cancel { background:transparent; border:1px solid var(--border); color:var(--muted); padding:8px 20px; border-radius:8px; cursor:pointer; font-family:'DM Sans',sans-serif; }
+  .btn-save { background:var(--accent); border:none; color:#fff; padding:8px 20px; border-radius:8px; cursor:pointer; font-family:'DM Sans',sans-serif; font-weight:600; }
+  .modal-error { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); border-radius:8px; padding:10px 14px; font-size:12px; color:var(--danger); margin-bottom:16px; display:none; }
+
+  /* MAIN */
+  main { display:grid; grid-template-columns:320px 1fr 280px; grid-template-rows:1fr 1fr; gap:12px; padding:12px 16px 16px; overflow:hidden; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; display:flex; flex-direction:column; overflow:hidden; animation:fadeUp .5s ease both; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  .card-title { font-family:'Bebas Neue',sans-serif; font-size:12px; letter-spacing:2.5px; color:var(--muted); margin-bottom:14px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .card-title .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+
+  .col-left { grid-row:1/3; display:flex; flex-direction:column; gap:12px; }
+  .col-right { grid-column:3; grid-row:1/3; display:flex; flex-direction:column; gap:12px; }
+
+  /* KPIs */
+  .kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .kpi { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px 16px; position:relative; overflow:hidden; }
+  .kpi::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; }
+  .kpi.ok::after { background:var(--ok); } .kpi.warn::after { background:var(--warn); }
+  .kpi.danger::after { background:var(--danger); } .kpi.total::after { background:var(--accent); }
+  .kpi-label { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .kpi-value { font-family:'Bebas Neue',sans-serif; font-size:48px; line-height:1; margin:2px 0 0; }
+  .kpi.ok .kpi-value { color:var(--ok); } .kpi.warn .kpi-value { color:var(--warn); }
+  .kpi.danger .kpi-value { color:var(--danger); } .kpi.total .kpi-value { color:var(--accent); }
+  .kpi-sub { font-size:10px; color:var(--muted); }
+
+  /* Responsáveis */
+  .resp-list { display:flex; flex-direction:column; gap:10px; flex:1; overflow-y:auto; }
+  .resp-item { display:flex; align-items:center; gap:12px; }
+  .resp-avatar { width:32px; height:32px; border-radius:50%; flex-shrink:0; background:linear-gradient(135deg,var(--accent),var(--today)); display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue',sans-serif; font-size:13px; }
+  .resp-info { flex:1; min-width:0; }
+  .resp-name { font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .resp-bar-wrap { height:3px; background:var(--border); border-radius:2px; margin-top:5px; }
+  .resp-bar { height:100%; border-radius:2px; background:var(--accent); transition:width 1s ease; }
+  .resp-bar.danger { background:var(--danger); } .resp-bar.warn { background:var(--warn); }
+  .resp-counts { font-size:10px; color:var(--muted); margin-top:3px; font-family:'JetBrains Mono',monospace; }
+
+  /* Tables */
+  .table-wrap { overflow-y:auto; flex:1; }
+  .table-wrap::-webkit-scrollbar { width:3px; }
+  .table-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  thead th { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); padding:0 8px 8px; text-align:left; border-bottom:1px solid var(--border); }
+  tbody tr { border-bottom:1px solid rgba(30,35,48,.5); }
+  tbody tr:hover { background:rgba(59,130,246,.04); }
+  tbody td { padding:8px; vertical-align:middle; }
+  .tc { max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; font-family:'JetBrains Mono',monospace; }
+  .badge.ok { background:rgba(34,211,160,.12); color:var(--ok); }
+  .badge.warn { background:rgba(245,158,11,.12); color:var(--warn); }
+  .badge.danger { background:rgba(239,68,68,.12); color:var(--danger); }
+  .badge.today { background:rgba(167,139,250,.12); color:var(--today); }
+
+  .pill { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; padding:1px 7px; border-radius:4px; }
+  .pill.danger { background:rgba(239,68,68,.15); color:var(--danger); }
+  .pill.warn { background:rgba(245,158,11,.15); color:var(--warn); }
+  .pill.ok { background:rgba(34,211,160,.15); color:var(--ok); }
+  .pill.today { background:rgba(167,139,250,.15); color:var(--today); }
+
+  /* Ticker */
+  .ticker-wrap { overflow:hidden; white-space:nowrap; background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.2); border-radius:8px; padding:5px 0; margin-bottom:10px; flex-shrink:0; display:none; }
+  .ticker { display:inline-block; animation:ticker 35s linear infinite; font-size:11px; color:var(--danger); font-family:'JetBrains Mono',monospace; padding-left:100%; }
+  @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-100%)} }
+  .ticker-wrap:hover .ticker { animation-play-state:paused; }
+
+  /* Atenção imediata */
+  .upcoming-list { display:flex; flex-direction:column; gap:7px; flex:1; overflow-y:auto; }
+  .upcoming-item { background:var(--bg); border-radius:8px; padding:9px 12px; border-left:3px solid var(--accent); display:flex; align-items:center; gap:10px; }
+  .upcoming-item.today { border-color:var(--today); }
+  .upcoming-item.danger { border-color:var(--danger); }
+  .upcoming-item.warn { border-color:var(--warn); }
+  .upcoming-tag { font-family:'JetBrains Mono',monospace; font-size:12px; min-width:46px; color:var(--accent); }
+  .upcoming-item.today .upcoming-tag { color:var(--today); }
+  .upcoming-item.danger .upcoming-tag { color:var(--danger); }
+  .upcoming-item.warn .upcoming-tag { color:var(--warn); }
+  .upcoming-desc { font-size:11px; line-height:1.4; }
+  .upcoming-client { font-size:10px; color:var(--muted); }
+
+  /* States */
+  .loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; flex:1; color:var(--muted); font-size:13px; }
+  .spinner { width:28px; height:28px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .empty { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:var(--muted); font-size:12px; gap:6px; padding:20px 0; }
+  .empty-icon { font-size:28px; opacity:.3; }
+  .err-box { display:flex; align-items:flex-start; gap:8px; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.25); border-radius:8px; padding:10px 14px; font-size:12px; color:var(--danger); margin:8px 0; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">VOYB<span>CONTABILIDADE</span></div>
+  <div>
+    <div class="header-date" id="hDate">—</div>
+    <div class="header-time" id="hTime">--:--:--</div>
+  </div>
+  <div class="header-right">
+    <div class="sync-info">
+      <div><span class="sync-dot" id="syncDot"></span><span id="syncStatus">Aguardando</span></div>
+      <div id="lastSync" style="margin-top:2px">Última sync: —</div>
+      <div style="margin-top:2px">Atualiza a cada <span id="intervalLabel">5</span>min</div>
+    </div>
+    <button class="config-btn" onclick="openModal()">⚙ Configurar API</button>
+  </div>
+</header>
+
+<main>
+  <div class="col-left">
+    <div class="card" style="animation-delay:.05s">
+      <div class="card-title"><span class="dot" style="background:var(--accent)"></span>RESUMO GERAL</div>
+      <div class="kpi-grid">
+        <div class="kpi total"><div class="kpi-label">Total</div><div class="kpi-value" id="kTotal">—</div><div class="kpi-sub">em aberto</div></div>
+        <div class="kpi danger"><div class="kpi-label">Atrasadas</div><div class="kpi-value" id="kAtrasadas">—</div><div class="kpi-sub">acima do prazo</div></div>
+        <div class="kpi warn"><div class="kpi-label">Hoje/2 dias</div><div class="kpi-value" id="kUrgente">—</div><div class="kpi-sub">vencendo em breve</div></div>
+        <div class="kpi ok"><div class="kpi-label">Em dia</div><div class="kpi-value" id="kOk">—</div><div class="kpi-sub">no prazo</div></div>
+      </div>
+    </div>
+    <div class="card" style="animation-delay:.1s; flex:1;">
+      <div class="card-title"><span class="dot" style="background:var(--today)"></span>POR CATEGORIA / RESP.</div>
+      <div class="resp-list" id="respList"><div class="loading"><div class="spinner"></div>Aguardando</div></div>
+    </div>
+  </div>
+
+  <div class="card" style="grid-column:2; grid-row:1; animation-delay:.15s;">
+    <div class="card-title"><span class="dot" style="background:var(--danger)"></span>ATRASADAS E URGENTES</div>
+    <div class="ticker-wrap" id="tickerWrap"><div class="ticker" id="tickerText"></div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Cliente / Fornecedor</th><th>Descrição</th><th>Vencto</th><th>Atraso</th><th>Status</th><th>Categoria</th></tr></thead>
+        <tbody id="tbUrgent"><tr><td colspan="6"><div class="loading"><div class="spinner"></div>Aguardando</div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="grid-column:2; grid-row:2; animation-delay:.2s;">
+    <div class="card-title"><span class="dot" style="background:var(--ok)"></span>PRÓXIMAS — 10 DIAS</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Cliente / Fornecedor</th><th>Descrição</th><th>Vencto</th><th>Dias</th><th>Categoria</th></tr></thead>
+        <tbody id="tbAll"><tr><td colspan="5"><div class="loading"><div class="spinner"></div>Aguardando</div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="col-right">
+    <div class="card" style="animation-delay:.25s; flex:1;">
+      <div class="card-title"><span class="dot" style="background:var(--warn)"></span>ATENÇÃO IMEDIATA</div>
+      <div class="upcoming-list" id="upList"><div class="loading"><div class="spinner"></div>Aguardando</div></div>
+    </div>
+  </div>
+</main>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2>⚙ Configuração — API Nibo</h2>
+    <p class="sub">
+      No Nibo: sua Empresa → <strong>Mais opções → Configurações → API</strong><br>
+      O token é passado no header <code style="color:var(--accent)">ApiToken</code> (não Authorization).<br>
+      Disponível a partir do plano <strong>Premium</strong>.
+    </p>
+    <div class="modal-error" id="modalError"></div>
+    <label>API Token do Nibo *</label>
+    <input type="password" id="cfgKey" placeholder="Cole aqui sua API Key">
+    <label>ID da Empresa (opcional)</label>
+    <input type="text" id="cfgCompany" placeholder="Deixe vazio para usar a empresa padrão">
+    <label>Intervalo de atualização (minutos)</label>
+    <input type="number" id="cfgInterval" min="1" max="60" value="5">
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveAndConnect()">Salvar e Conectar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────
+let cfg = { apiKey:'', companyId:'', intervalMin:5 };
+let refreshTimer = null;
+
+function loadCfg() {
+  try { const s = localStorage.getItem('voyb_cfg2'); if(s) cfg = {...cfg,...JSON.parse(s)}; } catch(e){} }
+function saveCfgLS() {
+  localStorage.setItem('voyb_cfg2', JSON.stringify(cfg)); }
+
+// ── CLOCK ────────────────────────────────────────
+const DIAS  = ['DOMINGO','SEGUNDA','TERÇA','QUARTA','QUINTA','SEXTA','SÁBADO'];
+const MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+function tick() {
+  const n = new Date();
+  document.getElementById('hDate').textContent = `${DIAS[n.getDay()]}, ${String(n.getDate()).padStart(2,'0')} ${MESES[n.getMonth()]} ${n.getFullYear()}`;
+  document.getElementById('hTime').textContent = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+}
+setInterval(tick,1000); tick();
+
+// ── MODAL ────────────────────────────────────────
+function openModal() {
+  document.getElementById('cfgKey').value = cfg.apiKey;
+  document.getElementById('cfgCompany').value = cfg.companyId;
+  document.getElementById('cfgInterval').value = cfg.intervalMin;
+  document.getElementById('modalError').style.display = 'none';
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+function showModalErr(msg) { const e=document.getElementById('modalError'); e.textContent='⚠ '+msg; e.style.display='block'; }
+
+function saveAndConnect() {
+  const key = document.getElementById('cfgKey').value.trim();
+  if(!key){ showModalErr('Informe a API Key do Nibo.'); return; }
+  cfg.apiKey     = key;
+  cfg.companyId  = document.getElementById('cfgCompany').value.trim();
+  cfg.intervalMin = parseInt(document.getElementById('cfgInterval').value)||5;
+  document.getElementById('intervalLabel').textContent = cfg.intervalMin;
+  saveCfgLS(); closeModal(); fetchAll(); setupTimer();
+}
+
+function setupTimer() {
+  if(refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(fetchAll, cfg.intervalMin*60000);
+}
+
+// ── NIBO API ─────────────────────────────────────
+// Endpoint correto: /empresas/v1/schedules/debit
+// Autenticação: header ApiToken (NÃO Authorization)
+// $orderby é OBRIGATÓRIO para paginação
+
+async function niboFetch(path) {
+  const headers = { 'ApiToken': cfg.apiKey };
+  if(cfg.companyId) headers['NiboAccountId'] = cfg.companyId;
+  const res = await fetch('https://api.nibo.com.br' + path, { method:'GET', headers });
+  if(res.status===401) throw new Error('API Key inválida. Verifique a chave em Configurações → API no Nibo.');
+  if(res.status===403) throw new Error('Sem permissão. O plano Premium é necessário para usar a API.');
+  if(!res.ok) {
+    let detail = '';
+    try { const j = await res.json(); detail = j.message || j.error || ''; } catch(e){}
+    throw new Error(`Erro ${res.status}${detail ? ': '+detail : '. Verifique sua API Key.'}`);
+  }
+  return res.json();
+}
+
+async function fetchSchedules() {
+  const today = new Date();
+  const from  = new Date(today); from.setDate(from.getDate()-90);
+  const to    = new Date(today); to.setDate(to.getDate()+30);
+  const fmt   = d => d.toISOString().split('T')[0];
+
+  // Busca pagamentos (obrigações a pagar) em aberto no Nibo
+  const filter = encodeURIComponent(`dueDate ge ${fmt(from)} and dueDate le ${fmt(to)}`);
+  const path   = `/empresas/v1/schedules/debit?$filter=${filter}&$orderby=dueDate&$top=300`;
+
+  const data = await niboFetch(path);
+  return Array.isArray(data) ? data : (data.items || data.value || []);
+}
+
+// ── HELPERS ──────────────────────────────────────
+function diffDays(ds) {
+  if(!ds) return null;
+  const t=new Date(); t.setHours(0,0,0,0);
+  const d=new Date(ds); d.setHours(0,0,0,0);
+  return Math.round((d-t)/86400000);
+}
+function fmtDate(ds) {
+  if(!ds) return '—';
+  const d=new Date(ds);
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function pillCls(diff) {
+  if(diff===null) return 'warn';
+  if(diff<0)  return 'danger';
+  if(diff===0) return 'today';
+  if(diff<=2) return 'warn';
+  return 'ok';
+}
+function pillLbl(diff) {
+  if(diff===null) return '?';
+  if(diff<0)  return `${diff*-1}d`;
+  if(diff===0) return 'HOJE';
+  return `+${diff}d`;
+}
+function badgeLbl(diff) {
+  if(diff===null) return {cls:'warn',label:'Sem data'};
+  if(diff<0)  return {cls:'danger',label:'Atrasada'};
+  if(diff===0) return {cls:'today', label:'Hoje!'};
+  if(diff<=2) return {cls:'warn',  label:'Urgente'};
+  return {cls:'ok',label:'Em dia'};
+}
+
+// Nibo Financeiro: campos reais da API
+function norm(item) {
+  return {
+    due:      item.dueDate || '',
+    title:    item.description || item.name || 'Sem descrição',
+    customer: item.stakeholder?.name || item.supplierName || '—',
+    assignee: item.category?.name || item.costCenter?.name || 'Sem categoria',
+    done:     item.status === 2 || item.isPaid === true || false,
+    value:    item.value || 0
+  };
+}
+
+// ── SYNC STATES ──────────────────────────────────
+function setSyncing() { document.getElementById('syncStatus').textContent='Sincronizando...'; document.getElementById('syncDot').className='sync-dot'; }
+function setSynced()  { document.getElementById('syncStatus').textContent='Conectado ✓'; document.getElementById('syncDot').className='sync-dot'; document.getElementById('lastSync').textContent=`Última sync: ${new Date().toLocaleTimeString('pt-BR')}`; }
+function setSyncErr() { document.getElementById('syncStatus').textContent='Erro na API'; document.getElementById('syncDot').className='sync-dot error'; }
+
+// ── RENDER ───────────────────────────────────────
+function renderAll(rawItems) {
+  const items = rawItems.map(norm).filter(i=>!i.done);
+
+  const atrasadas = items.filter(i=>{ const d=diffDays(i.due); return d!==null&&d<0; });
+  const urgente   = items.filter(i=>{ const d=diffDays(i.due); return d!==null&&d>=0&&d<=2; });
+  const proximas  = items.filter(i=>{ const d=diffDays(i.due); return d!==null&&d>2&&d<=10; });
+  const emDia     = items.filter(i=>{ const d=diffDays(i.due); return d!==null&&d>10; });
+
+  document.getElementById('kTotal').textContent     = items.length;
+  document.getElementById('kAtrasadas').textContent = atrasadas.length;
+  document.getElementById('kUrgente').textContent   = urgente.length;
+  document.getElementById('kOk').textContent        = emDia.length+proximas.length;
+
+  // Ticker
+  const tw = document.getElementById('tickerWrap');
+  if(atrasadas.length>0) {
+    tw.style.display='block';
+    document.getElementById('tickerText').textContent = '⚠ ATRASADAS:  '+atrasadas.map(i=>`${i.customer} → ${i.title} (${diffDays(i.due)*-1}d)`).join('   |   ')+'   ';
+  } else { tw.style.display='none'; }
+
+  // Tabela urgentes
+  const urgRows = [...atrasadas,...urgente].sort((a,b)=>new Date(a.due)-new Date(b.due));
+  const tbU = document.getElementById('tbUrgent');
+  tbU.innerHTML = urgRows.length===0
+    ? `<tr><td colspan="6"><div class="empty"><div class="empty-icon">✅</div>Nenhuma obrigação atrasada!</div></td></tr>`
+    : urgRows.map(i=>{
+        const diff=diffDays(i.due); const st=badgeLbl(diff); const pc=pillCls(diff);
+        return `<tr>
+          <td class="tc" style="font-weight:500">${i.customer}</td>
+          <td class="tc" style="color:var(--muted)">${i.title}</td>
+          <td style="font-family:'JetBrains Mono',monospace">${fmtDate(i.due)}</td>
+          <td><span class="pill ${pc}">${pillLbl(diff)}</span></td>
+          <td><span class="badge ${st.cls}">${st.label}</span></td>
+          <td style="color:var(--muted);font-size:11px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.assignee}</td>
+        </tr>`;
+      }).join('');
+
+  // Tabela próximas
+  const allRows = [...urgRows,...proximas].sort((a,b)=>new Date(a.due)-new Date(b.due)).slice(0,25);
+  const tbA = document.getElementById('tbAll');
+  tbA.innerHTML = allRows.length===0
+    ? `<tr><td colspan="5"><div class="empty"><div class="empty-icon">📅</div>Nenhuma obrigação nos próximos 10 dias</div></td></tr>`
+    : allRows.map(i=>{
+        const diff=diffDays(i.due);
+        return `<tr>
+          <td class="tc" style="font-weight:500">${i.customer}</td>
+          <td class="tc" style="color:var(--muted)">${i.title}</td>
+          <td style="font-family:'JetBrains Mono',monospace">${fmtDate(i.due)}</td>
+          <td><span class="pill ${pillCls(diff)}">${pillLbl(diff)}</span></td>
+          <td style="color:var(--muted);font-size:11px">${i.assignee}</td>
+        </tr>`;
+      }).join('');
+
+  // Por categoria
+  const byR = {};
+  items.forEach(i=>{ if(!byR[i.assignee]) byR[i.assignee]={total:0,atrasadas:0,urgente:0}; byR[i.assignee].total++; const d=diffDays(i.due); if(d!==null&&d<0) byR[i.assignee].atrasadas++; else if(d!==null&&d<=2) byR[i.assignee].urgente++; });
+  const maxT = Math.max(...Object.values(byR).map(r=>r.total),1);
+  const sorted = Object.entries(byR).sort((a,b)=>b[1].atrasadas-a[1].atrasadas||b[1].total-a[1].total);
+  document.getElementById('respList').innerHTML = sorted.length===0
+    ? `<div class="empty"><div class="empty-icon">👥</div>Sem dados</div>`
+    : sorted.map(([name,d])=>{
+        const ini=name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+        const pct=Math.round(d.total/maxT*100); const bc=d.atrasadas>0?'danger':d.urgente>0?'warn':'';
+        return `<div class="resp-item"><div class="resp-avatar">${ini}</div><div class="resp-info"><div class="resp-name">${name}</div><div class="resp-bar-wrap"><div class="resp-bar ${bc}" style="width:${pct}%"></div></div><div class="resp-counts">${d.total} total${d.atrasadas>0?` · <span style="color:var(--danger)">${d.atrasadas} atrasadas</span>`:''}${d.urgente>0?` · <span style="color:var(--warn)">${d.urgente} urgentes</span>`:''}</div></div></div>`;
+      }).join('');
+
+  // Atenção imediata
+  const immed = [...atrasadas,...urgente].slice(0,8).sort((a,b)=>new Date(a.due)-new Date(b.due));
+  document.getElementById('upList').innerHTML = immed.length===0
+    ? `<div class="empty"><div class="empty-icon">✅</div>Tudo tranquilo!</div>`
+    : immed.map(i=>{
+        const diff=diffDays(i.due); const cls=diff<0?'danger':diff===0?'today':'warn'; const tag=diff<0?`${diff*-1}d`:diff===0?'HOJE':`+${diff}d`;
+        return `<div class="upcoming-item ${cls}"><div class="upcoming-tag">${tag}</div><div><div class="upcoming-desc">${i.title}</div><div class="upcoming-client">${i.customer}</div></div></div>`;
+      }).join('');
+}
+
+function showNoConfig() {
+  const nc6 = `<tr><td colspan="6"><div class="empty"><div class="empty-icon">🔑</div>Configure a API Key para começar</div></td></tr>`;
+  const nc5 = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">🔑</div>Configure a API Key para começar</div></td></tr>`;
+  document.getElementById('tbUrgent').innerHTML=nc6;
+  document.getElementById('tbAll').innerHTML=nc5;
+  document.getElementById('respList').innerHTML=`<div class="empty"><div class="empty-icon">🔑</div>Sem dados</div>`;
+  document.getElementById('upList').innerHTML=`<div class="empty"><div class="empty-icon">🔑</div>Sem dados</div>`;
+  ['kTotal','kAtrasadas','kUrgente','kOk'].forEach(id=>document.getElementById(id).textContent='—');
+}
+
+function showErr(msg) {
+  const html = `<tr><td colspan="6"><div class="err-box">⚠ ${msg}</div></td></tr>`;
+  document.getElementById('tbUrgent').innerHTML=html;
+  document.getElementById('tbAll').innerHTML=html.replace('colspan="6"','colspan="5"');
+  setSyncErr();
+}
+
+// ── FETCH ────────────────────────────────────────
+async function fetchAll() {
+  if(!cfg.apiKey){ showNoConfig(); return; }
+  setSyncing();
+  try {
+    const items = await fetchSchedules();
+    renderAll(items);
+    setSynced();
+  } catch(err) {
+    console.error(err);
+    showErr(err.message||'Erro ao conectar com a API do Nibo.');
+  }
+}
+
+// ── INIT ─────────────────────────────────────────
+loadCfg();
+document.getElementById('intervalLabel').textContent = cfg.intervalMin;
+if(cfg.apiKey){ fetchAll(); setupTimer(); }
+else { showNoConfig(); setTimeout(openModal, 600); }
+</script>
+</body>
+</html>
