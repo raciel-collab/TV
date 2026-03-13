@@ -291,7 +291,7 @@ async function niboFetch(path) {
   const proxy = (cfg.proxyUrl || '').replace(/\/$/, '');
   if (!proxy || proxy.includes('SEU-PROXY')) throw new Error('Configure a URL do proxy no campo "URL do Proxy" nas configurações.');
 
-  const headers = { 'ApiToken': cfg.apiKey };
+  const headers = { 'X-API-Key': cfg.apiKey };
   if(cfg.companyId) headers['NiboAccountId'] = cfg.companyId;
 
   const res = await fetch(proxy + '/nibo' + path, { method:'GET', headers });
@@ -306,17 +306,13 @@ async function niboFetch(path) {
 }
 
 async function fetchSchedules() {
-  const today = new Date();
-  const from  = new Date(today); from.setDate(from.getDate()-90);
-  const to    = new Date(today); to.setDate(to.getDate()+30);
-  const fmt   = d => d.toISOString().split('T')[0];
+  const FIRM_ID = 'd0cf32b9-277b-4b00-a526-d368e4a05105';
 
-  // Busca pagamentos (obrigações a pagar) em aberto no Nibo
-  const filter = encodeURIComponent(`dueDate ge ${fmt(from)} and dueDate le ${fmt(to)}`);
-  const path   = `/empresas/v1/schedules/debit?$filter=${filter}&$orderby=dueDate&$top=300`;
+  // Endpoint correto do Nibo Obrigações
+  const path = `/accountant/api/v1/accountingfirms/${FIRM_ID}/reports/obligations/complete?$top=300`;
 
   const data = await niboFetch(path);
-  return Array.isArray(data) ? data : (data.items || data.value || []);
+  return Array.isArray(data) ? data : (data.items || data.value || data.results || []);
 }
 
 // ── HELPERS ──────────────────────────────────────
@@ -354,13 +350,15 @@ function badgeLbl(diff) {
 
 // Nibo Financeiro: campos reais da API
 function norm(item) {
+  // Campos reais do Nibo Obrigações (reports/obligations/complete)
   return {
-    due:      item.dueDate || '',
-    title:    item.description || item.name || 'Sem descrição',
-    customer: item.stakeholder?.name || item.supplierName || '—',
-    assignee: item.category?.name || item.costCenter?.name || 'Sem categoria',
-    done:     item.status === 2 || item.isPaid === true || false,
-    value:    item.value || 0
+    due:      item.dueDate || item.internalDeadline || '',
+    title:    item.obligation?.name || 'Sem descrição',
+    customer: item.customer?.name || '—',
+    assignee: item.inChargeName || item.department?.name || 'Sem responsável',
+    done:     item.status === 'Done' || item.status === 'Filed' || item.filedDate !== null || false,
+    dept:     item.department?.name || '',
+    accrual:  item.accrual || ''
   };
 }
 
