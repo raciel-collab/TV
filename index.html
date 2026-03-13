@@ -216,6 +216,8 @@
       Disponível a partir do plano <strong>Premium</strong>.
     </p>
     <div class="modal-error" id="modalError"></div>
+    <label>URL do Proxy (Render) *</label>
+    <input type="text" id="cfgProxy" placeholder="https://seu-proxy.onrender.com">
     <label>API Token do Nibo *</label>
     <input type="password" id="cfgKey" placeholder="Cole aqui sua API Key">
     <label>ID da Empresa (opcional)</label>
@@ -231,7 +233,7 @@
 
 <script>
 // ── CONFIG ──────────────────────────────────────
-let cfg = { apiKey:'', companyId:'', intervalMin:5 };
+let cfg = { apiKey:'', companyId:'', intervalMin:5, proxyUrl:'' };
 let refreshTimer = null;
 
 function loadCfg() {
@@ -251,6 +253,7 @@ setInterval(tick,1000); tick();
 
 // ── MODAL ────────────────────────────────────────
 function openModal() {
+  document.getElementById('cfgProxy').value = cfg.proxyUrl;
   document.getElementById('cfgKey').value = cfg.apiKey;
   document.getElementById('cfgCompany').value = cfg.companyId;
   document.getElementById('cfgInterval').value = cfg.intervalMin;
@@ -263,6 +266,7 @@ function showModalErr(msg) { const e=document.getElementById('modalError'); e.te
 function saveAndConnect() {
   const key = document.getElementById('cfgKey').value.trim();
   if(!key){ showModalErr('Informe a API Key do Nibo.'); return; }
+  cfg.proxyUrl   = document.getElementById('cfgProxy').value.trim();
   cfg.apiKey     = key;
   cfg.companyId  = document.getElementById('cfgCompany').value.trim();
   cfg.intervalMin = parseInt(document.getElementById('cfgInterval').value)||5;
@@ -280,10 +284,17 @@ function setupTimer() {
 // Autenticação: header ApiToken (NÃO Authorization)
 // $orderby é OBRIGATÓRIO para paginação
 
+// URL do proxy — atualizada automaticamente após subir no Render
+const PROXY_URL = cfg.proxyUrl || 'https://SEU-PROXY.onrender.com';
+
 async function niboFetch(path) {
+  const proxy = (cfg.proxyUrl || '').replace(/\/$/, '');
+  if (!proxy || proxy.includes('SEU-PROXY')) throw new Error('Configure a URL do proxy no campo "URL do Proxy" nas configurações.');
+
   const headers = { 'ApiToken': cfg.apiKey };
   if(cfg.companyId) headers['NiboAccountId'] = cfg.companyId;
-  const res = await fetch('https://api.nibo.com.br' + path, { method:'GET', headers });
+
+  const res = await fetch(proxy + '/nibo' + path, { method:'GET', headers });
   if(res.status===401) throw new Error('API Key inválida. Verifique a chave em Configurações → API no Nibo.');
   if(res.status===403) throw new Error('Sem permissão. O plano Premium é necessário para usar a API.');
   if(!res.ok) {
