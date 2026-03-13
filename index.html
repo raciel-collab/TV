@@ -309,7 +309,7 @@ async function fetchSchedules() {
   const FIRM_ID = 'd0cf32b9-277b-4b00-a526-d368e4a05105';
 
   // Endpoint correto do Nibo Obrigações
-  const path = `/accountant/api/v1/accountingfirms/${FIRM_ID}/reports/obligations/complete?$top=300`;
+  const path = `/accountant/api/v1/accountingfirms/${FIRM_ID}/reports/obligations/complete?\$orderby=dueDate&\$top=300`;
 
   const data = await niboFetch(path);
   return Array.isArray(data) ? data : (data.items || data.value || data.results || []);
