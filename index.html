@@ -372,6 +372,7 @@ async function fetchSchedules() {
     const deStr  = de.toISOString().slice(0,10);
     const ateStr = ate.toISOString().slice(0,10);
     let all = [], skip = 0;
+    const seen = new Set();
     while(true) {
       const path = `/accountant/api/v1/accountingfirms/${FIRM_ID}/reports/obligations/complete?` +
         `\$orderby=status&\$top=100&\$skip=${skip}` +
@@ -379,8 +380,16 @@ async function fetchSchedules() {
       const data = await niboFetch(path);
       const items = data.items || [];
       const abertas = items.filter(i => i.status === null);
-      all = all.concat(abertas);
-      if(items.length < 100 || abertas.length === 0) break;
+      // Deduplica por chave composta (id ou obrigação+cliente+data)
+      let novos = 0;
+      abertas.forEach(i => {
+        const key = i.id
+          ? String(i.id)
+          : `${i.obligation?.id}|${i.customer?.id}|${i.dueDate}|${i.department?.id}`;
+        if(!seen.has(key)) { seen.add(key); all.push(i); novos++; }
+      });
+      // Para se não há mais itens ou nenhum item novo (evita loop)
+      if(items.length < 100 || novos === 0) break;
       skip += 100;
       if(skip > 3000) break;
     }
