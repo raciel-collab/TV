@@ -366,13 +366,9 @@ async function niboFetch(path) {
 
 async function fetchSchedules() {
   const FIRM_ID = 'd0cf32b9-277b-4b00-a526-d368e4a05105';
-  // Data mínima fixa — nada antes de 01/03/2026
-  const DATA_MIN = new Date('2026-03-01');
 
+  // Busca só o mês corrente — igual ao filtro Mar/2026 do Nibo
   async function fetchPeriodo(de, ate) {
-    // Garante que nunca busca antes de 01/03/2026
-    if(ate < DATA_MIN) return [];
-    if(de < DATA_MIN) de = new Date(DATA_MIN);
     const deStr  = de.toISOString().slice(0,10);
     const ateStr = ate.toISOString().slice(0,10);
     let all = [], skip = 0;
@@ -392,28 +388,10 @@ async function fetchSchedules() {
   }
 
   const hoje = new Date();
-  const inicioMes  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  const fimMes     = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0);
-  const inicioProx = new Date(hoje.getFullYear(), hoje.getMonth()+1, 1);
-  const fimProx    = new Date(hoje.getFullYear(), hoje.getMonth()+2, 0);
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const fimMes    = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0);
 
-  // Atrasadas = de 01/03/2026 até ontem
-  const ontem = new Date(hoje); ontem.setDate(hoje.getDate()-1);
-
-  const [atrasadas, mesAtual, mesProx] = await Promise.all([
-    fetchPeriodo(DATA_MIN, ontem),
-    fetchPeriodo(inicioMes, fimMes),
-    fetchPeriodo(inicioProx, fimProx),
-  ]);
-
-  // Remove duplicatas (mês atual pode sobrepor atrasadas se hoje é março)
-  const ids = new Set();
-  const all = [...atrasadas, ...mesAtual, ...mesProx].filter(i => {
-    if(ids.has(i.id)) return false;
-    ids.add(i.id);
-    return true;
-  });
-  return all;
+  return await fetchPeriodo(inicioMes, fimMes);
 }
 
 // ── HELPERS ──────────────────────────────────────
