@@ -308,11 +308,40 @@ async function niboFetch(path) {
 async function fetchSchedules() {
   const FIRM_ID = 'd0cf32b9-277b-4b00-a526-d368e4a05105';
 
-  // Endpoint correto do Nibo Obrigações
-  const path = `/accountant/api/v1/accountingfirms/${FIRM_ID}/reports/obligations/complete?\$orderby=dueDate%20desc&\$top=300`;
+  async function fetchPeriodo(de, ate) {
+    const deStr  = de.toISOString().slice(0,10);
+    const ateStr = ate.toISOString().slice(0,10);
+    let all = [], skip = 0;
+    while(true) {
+      const path = `/accountant/api/v1/accountingfirms/${FIRM_ID}/reports/obligations/complete?` +
+        `\$orderby=status&\$top=100&\$skip=${skip}` +
+        `&\$filter=dueDate%20ge%20${deStr}%20and%20dueDate%20le%20${ateStr}`;
+      const data = await niboFetch(path);
+      const items = data.items || [];
+      const abertas = items.filter(i => i.status === null);
+      all = all.concat(abertas);
+      if(items.length < 100 || abertas.length === 0) break;
+      skip += 100;
+      if(skip > 3000) break;
+    }
+    return all;
+  }
 
-  const data = await niboFetch(path);
-  return Array.isArray(data) ? data : (data.items || data.value || data.results || []);
+  const hoje = new Date();
+  const inicioMes    = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const fimMes       = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0);
+  const inicioMesAnt = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
+  const fimMesAnt    = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+  const inicioProx   = new Date(hoje.getFullYear(), hoje.getMonth()+1, 1);
+  const fimProx      = new Date(hoje.getFullYear(), hoje.getMonth()+2, 0);
+
+  const [mesAtual, mesAnt, mesProx] = await Promise.all([
+    fetchPeriodo(inicioMes, fimMes),
+    fetchPeriodo(inicioMesAnt, fimMesAnt),
+    fetchPeriodo(inicioProx, fimProx),
+  ]);
+
+  return [...mesAnt, ...mesAtual, ...mesProx];
 }
 
 // ── HELPERS ──────────────────────────────────────
