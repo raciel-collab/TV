@@ -25,6 +25,20 @@
     --danger:  #ef4444;
     --today:   #a78bfa;
   }
+  .dept-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .dept-select:hover, .dept-select:focus { border-color: var(--accent); }
+  .dept-select option { background: #1a1d26; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
     background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif;
@@ -163,6 +177,14 @@
       <div id="lastSync" style="margin-top:2px">Última sync: —</div>
       <div style="margin-top:2px">Atualiza a cada <span id="intervalLabel">5</span>min</div>
     </div>
+    <select class="dept-select" id="deptSelect" onchange="mudarDept(this.value)">
+      <option value="">Todos os Departamentos</option>
+      <option value="Cont">Departamento Contábil</option>
+      <option value="FISCAL">Departamento Fiscal</option>
+      <option value="PESSOAL">Departamento Pessoal</option>
+      <option value="OUTROS">Outros</option>
+      <option value="Parcel">Parcelamentos</option>
+    </select>
     <button class="config-btn" onclick="openModal()">⚙ Configurar API</button>
   </div>
 </header>
@@ -241,8 +263,17 @@
 <script>
 // ── CONFIG ──────────────────────────────────────
 let cfg = { apiKey:'', companyId:'', intervalMin:5, proxyUrl:'' };
-// Filtro de departamento via URL: ?dept=PESSOAL ou ?dept=CONTABIL
-const URL_DEPT = new URLSearchParams(window.location.search).get('dept') || '';
+// Filtro de departamento — lê da URL ou do seletor
+let URL_DEPT = new URLSearchParams(window.location.search).get('dept') || '';
+
+function mudarDept(val) {
+  URL_DEPT = val;
+  // Atualiza label no header
+  const lbl = document.getElementById('deptLabel');
+  if(lbl) lbl.textContent = val ? val.toUpperCase() : 'CONTABILIDADE';
+  // Re-renderiza com último dado buscado (sem nova chamada à API)
+  if(window._lastItems) renderAll(window._lastItems);
+}
 let refreshTimer = null;
 
 function loadCfg() {
@@ -280,6 +311,17 @@ function saveAndConnect() {
   cfg.companyId  = document.getElementById('cfgCompany').value.trim();
   cfg.intervalMin = parseInt(document.getElementById('cfgInterval').value)||5;
   document.getElementById('intervalLabel').textContent = cfg.intervalMin;
+// Inicializa seletor com dept da URL se houver
+if(URL_DEPT) {
+  const sel = document.getElementById('deptSelect');
+  if(sel) {
+    for(let i=0; i<sel.options.length; i++) {
+      if(sel.options[i].value.toUpperCase() === URL_DEPT.toUpperCase()) {
+        sel.selectedIndex = i; break;
+      }
+    }
+  }
+}
 // Mostra departamento no header se filtrado
 if(URL_DEPT) {
   const el = document.querySelector('header .subtitle') || document.querySelector('header small');
@@ -532,6 +574,7 @@ async function fetchAll() {
   setSyncing();
   try {
     const items = await fetchSchedules();
+    window._lastItems = items;
     renderAll(items);
     setSynced();
   } catch(err) {
@@ -543,6 +586,17 @@ async function fetchAll() {
 // ── INIT ─────────────────────────────────────────
 loadCfg();
 document.getElementById('intervalLabel').textContent = cfg.intervalMin;
+// Inicializa seletor com dept da URL se houver
+if(URL_DEPT) {
+  const sel = document.getElementById('deptSelect');
+  if(sel) {
+    for(let i=0; i<sel.options.length; i++) {
+      if(sel.options[i].value.toUpperCase() === URL_DEPT.toUpperCase()) {
+        sel.selectedIndex = i; break;
+      }
+    }
+  }
+}
 // Mostra departamento no header se filtrado
 if(URL_DEPT) {
   const el = document.querySelector('header .subtitle') || document.querySelector('header small');
