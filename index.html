@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VOYB · Dashboard de Obrigações</title>
+<script>
+  // Atualiza título com departamento se filtrado
+  (function(){
+    const d = new URLSearchParams(window.location.search).get('dept');
+    if(d) document.title = 'VOYB · ' + d.toUpperCase();
+  })();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -145,7 +152,7 @@
 <body>
 
 <header>
-  <div class="logo">VOYB<span>CONTABILIDADE</span></div>
+  <div class="logo">VOYB<span id="deptLabel">CONTABILIDADE</span></div>
   <div>
     <div class="header-date" id="hDate">—</div>
     <div class="header-time" id="hTime">--:--:--</div>
@@ -234,6 +241,8 @@
 <script>
 // ── CONFIG ──────────────────────────────────────
 let cfg = { apiKey:'', companyId:'', intervalMin:5, proxyUrl:'' };
+// Filtro de departamento via URL: ?dept=PESSOAL ou ?dept=CONTABIL
+const URL_DEPT = new URLSearchParams(window.location.search).get('dept') || '';
 let refreshTimer = null;
 
 function loadCfg() {
@@ -271,6 +280,14 @@ function saveAndConnect() {
   cfg.companyId  = document.getElementById('cfgCompany').value.trim();
   cfg.intervalMin = parseInt(document.getElementById('cfgInterval').value)||5;
   document.getElementById('intervalLabel').textContent = cfg.intervalMin;
+// Mostra departamento no header se filtrado
+if(URL_DEPT) {
+  const el = document.querySelector('header .subtitle') || document.querySelector('header small');
+  if(el) el.textContent = URL_DEPT.toUpperCase();
+  // Tenta achar o elemento de subtítulo do header
+  const hSub = document.getElementById('deptLabel');
+  if(hSub) hSub.textContent = URL_DEPT.toUpperCase();
+}
   saveCfgLS(); closeModal(); fetchAll(); setupTimer();
 }
 
@@ -307,8 +324,13 @@ async function niboFetch(path) {
 
 async function fetchSchedules() {
   const FIRM_ID = 'd0cf32b9-277b-4b00-a526-d368e4a05105';
+  // Data mínima fixa — nada antes de 01/03/2026
+  const DATA_MIN = new Date('2026-03-01');
 
   async function fetchPeriodo(de, ate) {
+    // Garante que nunca busca antes de 01/03/2026
+    if(ate < DATA_MIN) return [];
+    if(de < DATA_MIN) de = new Date(DATA_MIN);
     const deStr  = de.toISOString().slice(0,10);
     const ateStr = ate.toISOString().slice(0,10);
     let all = [], skip = 0;
@@ -328,20 +350,28 @@ async function fetchSchedules() {
   }
 
   const hoje = new Date();
-  const inicioMes    = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  const fimMes       = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0);
-  const inicioMesAnt = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
-  const fimMesAnt    = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
-  const inicioProx   = new Date(hoje.getFullYear(), hoje.getMonth()+1, 1);
-  const fimProx      = new Date(hoje.getFullYear(), hoje.getMonth()+2, 0);
+  const inicioMes  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const fimMes     = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0);
+  const inicioProx = new Date(hoje.getFullYear(), hoje.getMonth()+1, 1);
+  const fimProx    = new Date(hoje.getFullYear(), hoje.getMonth()+2, 0);
 
-  const [mesAtual, mesAnt, mesProx] = await Promise.all([
+  // Atrasadas = de 01/03/2026 até ontem
+  const ontem = new Date(hoje); ontem.setDate(hoje.getDate()-1);
+
+  const [atrasadas, mesAtual, mesProx] = await Promise.all([
+    fetchPeriodo(DATA_MIN, ontem),
     fetchPeriodo(inicioMes, fimMes),
-    fetchPeriodo(inicioMesAnt, fimMesAnt),
     fetchPeriodo(inicioProx, fimProx),
   ]);
 
-  return [...mesAnt, ...mesAtual, ...mesProx];
+  // Remove duplicatas (mês atual pode sobrepor atrasadas se hoje é março)
+  const ids = new Set();
+  const all = [...atrasadas, ...mesAtual, ...mesProx].filter(i => {
+    if(ids.has(i.id)) return false;
+    ids.add(i.id);
+    return true;
+  });
+  return all;
 }
 
 // ── HELPERS ──────────────────────────────────────
@@ -399,7 +429,12 @@ function setSyncErr() { document.getElementById('syncStatus').textContent='Erro 
 
 // ── RENDER ───────────────────────────────────────
 function renderAll(rawItems) {
-  const items = rawItems.map(norm).filter(i=>!i.done);
+  let items = rawItems.map(norm).filter(i=>!i.done);
+  // Filtro por departamento via URL param
+  if(URL_DEPT) {
+    const deptUpper = URL_DEPT.toUpperCase();
+    items = items.filter(i => i.dept.toUpperCase().includes(deptUpper));
+  }
 
   const atrasadas = items.filter(i=>{ const d=diffDays(i.due); return d!==null&&d<0; });
   const urgente   = items.filter(i=>{ const d=diffDays(i.due); return d!==null&&d>=0&&d<=2; });
@@ -508,6 +543,14 @@ async function fetchAll() {
 // ── INIT ─────────────────────────────────────────
 loadCfg();
 document.getElementById('intervalLabel').textContent = cfg.intervalMin;
+// Mostra departamento no header se filtrado
+if(URL_DEPT) {
+  const el = document.querySelector('header .subtitle') || document.querySelector('header small');
+  if(el) el.textContent = URL_DEPT.toUpperCase();
+  // Tenta achar o elemento de subtítulo do header
+  const hSub = document.getElementById('deptLabel');
+  if(hSub) hSub.textContent = URL_DEPT.toUpperCase();
+}
 if(cfg.apiKey){ fetchAll(); setupTimer(); }
 else { showNoConfig(); setTimeout(openModal, 600); }
 </script>
